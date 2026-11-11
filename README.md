@@ -99,4 +99,4 @@ All of them live in the game's `config/` folder:
 
 ## License
 
-AGPL-3.0 (`LICENSE`). The sources of adapted code are listed in `CREDITS`.
+AGPL-3.0 (`LICENSE`).
