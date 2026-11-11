@@ -1,0 +1,58 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+repositories {
+	maven {
+		name = "Modrinth"
+		url = "https://api.modrinth.com/maven"
+		content { includeGroup "maven.modrinth" }
+	}
+}
+
+loom {
+	splitEnvironmentSourceSets()
+
+	mods {
+		"futureplus" {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
+		}
+	}
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	// Sodium (performance): embedded in the Futureplus jar (jar-in-jar), no need to install it separately.
+	implementation "maven.modrinth:sodium:${project.sodium_version}"
+	include "maven.modrinth:sodium:${project.sodium_version}"
+}
+
+processResources {
+	def version = project.version
+	inputs.property "version", version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": version
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+}
+
+java {
+	withSourcesJar()
+
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
+
+// The distributed jar keeps a fixed name (futureplus.jar); the version only lives in the mod metadata.
+tasks.withType(AbstractArchiveTask).configureEach {
+	archiveBaseName.set("futureplus")
+	archiveVersion.set("")
+}

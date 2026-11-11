@@ -1,0 +1,19 @@
+{
+ "providers": [
+  {
+   "type": "ttf",
+   "file": "futureplus:arial_bolditalic.ttf",
+   "shift": [
+    0.0,
+    0.0
+   ],
+   "size": 18.0,
+   "oversample": 5.0,
+   "skip": []
+  },
+  {
+   "type": "reference",
+   "id": "minecraft:default"
+  }
+ ]
+}

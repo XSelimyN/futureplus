@@ -1,0 +1,92 @@
+{
+  "kill.achievement": {
+    "category": "player",
+    "sounds": [
+      {
+        "name": "futureplus:kill/achievement",
+        "stream": false
+      }
+    ]
+  },
+  "kill.boing": {
+    "category": "player",
+    "sounds": [
+      {
+        "name": "futureplus:kill/boing",
+        "stream": false
+      }
+    ]
+  },
+  "kill.bonk": {
+    "category": "player",
+    "sounds": [
+      {
+        "name": "futureplus:kill/bonk",
+        "stream": false
+      }
+    ]
+  },
+  "kill.double_kill": {
+    "category": "player",
+    "sounds": [
+      {
+        "name": "futureplus:kill/double_kill",
+        "stream": false
+      }
+    ]
+  },
+  "kill.geodash": {
+    "category": "player",
+    "sounds": [
+      {
+        "name": "futureplus:kill/geodash",
+        "stream": false
+      }
+    ]
+  },
+  "kill.gong": {
+    "category": "player",
+    "sounds": [
+      {
+        "name": "futureplus:kill/gong",
+        "stream": false
+      }
+    ]
+  },
+  "kill.headshot": {
+    "category": "player",
+    "sounds": [
+      {
+        "name": "futureplus:kill/headshot",
+        "stream": false
+      }
+    ]
+  },
+  "kill.mlg": {
+    "category": "player",
+    "sounds": [
+      {
+        "name": "futureplus:kill/mlg",
+        "stream": false
+      }
+    ]
+  },
+  "kill.undertale": {
+    "category": "player",
+    "sounds": [
+      {
+        "name": "futureplus:kill/undertale",
+        "stream": false
+      }
+    ]
+  },
+  "kill.winning": {
+    "category": "player",
+    "sounds": [
+      {
+        "name": "futureplus:kill/winning",
+        "stream": false
+      }
+    ]
+  }
+}

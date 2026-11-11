@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "futureplus",
+  "version": "${version}",
+  "name": "Future+",
+  "description": "Helper (addon) utility client that runs alongside Future and adds modules Future doesn't have.",
+  "authors": [
+    "selim"
+  ],
+  "license": "AGPL-3.0",
+  "icon": "assets/futureplus/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.futureplus.client.FutureplusClient"
+    ]
+  },
+  "mixins": [
+    {
+      "config": "futureplus.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~26.1.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
