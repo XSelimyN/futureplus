@@ -19,7 +19,7 @@ import java.util.Map;
 import java.util.function.ToDoubleFunction;
 
 /**
- * Port of Lure Client's MovementPredictionManager + PlayerMotionPredictor + MotionHistory: players' boxes over the next 20 ticks
+ * Movement prediction (prediction manager + player motion predictor + motion history): players' boxes over the next 20 ticks
  * (weighted average velocity, acceleration, friction, gravity, collision). AutoCrystal uses it for "Extrapolation".
  */
 final class MotionPredictor {
@@ -87,7 +87,7 @@ final class MotionPredictor {
 
     private static Minecraft mc() { return Minecraft.getInstance(); }
 
-    /** Every 25 ms (lure: MinecraftRunTickEvent). */
+    /** Every 25 ms. */
     static void update() {
         Minecraft mc = mc();
         if (mc.level == null || mc.player == null) { tracks.clear(); return; }
@@ -126,7 +126,7 @@ final class MotionPredictor {
         return resolve(b, col, x, y, z);
     }
 
-    /** As in Lure: collision axis by axis, the result applied to the starting box as a total. */
+    /** Collision axis by axis, the result applied to the starting box as a total. */
     private static AABB resolve(AABB b, List<VoxelShape> col, double x, double y, double z) {
         if (col.isEmpty()) return b.move(x, y, z);
         AABB orig = b;

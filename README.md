@@ -17,7 +17,7 @@ It sits in the same `mods` folder as Future and works together with it. For exam
 | Combat | PistonAura | Builds a piston + crystal setup next to the target and detonates it (NCP). The `Grim` setting (or `,grim on`) switches to the Grim anticheat friendly `GrimPiston` path (`Attack Delay (s)`: wait between two attacks, in seconds); it clicks leftover blocks so Future's SpeedMine breaks them |
 | Combat | MaceAura | Climbs with an elytra and mace dives onto the target |
 | Combat | AnchorAura | Places, charges and detonates respawn anchors |
-| Combat | Suicide | Port of Lure Client's AutoCrystal > ForceSuicide: instantly types `.t offhand` in chat to turn off AutoTotem, runs the hidden `AutoCrystal` with target = you (place/break, Instant, Sequential, Silent swap); turns off on death and turns AutoTotem back on with `.t offhand` |
+| Combat | Suicide | Kills you with your own crystals: instantly types `.t offhand` in chat to turn off AutoTotem, runs the hidden `AutoCrystal` with target = you (place/break, Instant, Sequential, Silent swap); turns off on death and turns AutoTotem back on with `.t offhand` |
 | Combat | Blocker | Covers threatened blocks with obsidian; the AntiCEV setting also covers the 3x3 layer above the head |
 | Combat | AntiPhase | Stops the target from phasing into a block |
 | Combat | FakePlayer+ | Spawns a fake player for testing |
@@ -58,8 +58,8 @@ src/main/resources/assets/futureplus/          font, ClickGUI textures, icon
 | `ClickGui` | The menu; module registration, key binding, saving settings to disk |
 | `Setting` | The setting type shown in the ClickGUI (toggle, number, choice, color); with `when(condition)` it is hidden and locked while the setting it depends on is off, and the row animates open / closed when the condition changes |
 | `CombatSupport` | Packet rotation, explosion damage calculation, slot/hand selection |
-| `AutoCrystal` | Port of Lure Client's AutoCrystal (not in the module list, used by Suicide) |
-| `CrystalDamage`, `MotionPredictor` | Ports of Lure's explosion damage / raycast and player movement prediction (for AutoCrystal) |
+| `AutoCrystal` | Crystal aura behind Suicide (not in the module list) |
+| `CrystalDamage`, `MotionPredictor` | Explosion damage / raycast and player movement prediction (for AutoCrystal) |
 | `PlacementSupport` | Block placement helpers |
 | `WorldDraw`, `Gfx` | In-world and on-screen drawing |
 | `FutureLogo` | The Future logo on the loading screen: drawn as vectors, the texture is generated at its on-screen pixel size (`LoadingOverlayMixin`: dark background, red loading bar) |

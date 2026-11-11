@@ -13,7 +13,7 @@ final class Tooltips {
         Map.entry("Blocker", "Blocks the movement space around a nearby target."),
         Map.entry("Blocker.AntiCEV", "Covers the 3x3 layer one block above your head and breaks crystals placed on it."),
         Map.entry("AnchorAura", "Places a respawn anchor and detonates it with glowstone."),
-        Map.entry("Suicide", "Lure AutoCrystal ForceSuicide: types .t offhand to turn off AutoTotem, then places and breaks crystals on yourself. Turns off and types it again when you die."),
+        Map.entry("Suicide", "AutoCrystal ForceSuicide: types .t offhand to turn off AutoTotem, then places and breaks crystals on yourself. Turns off and types it again when you die."),
         Map.entry("AntiPhase", "Fills empty blocks the opponent phases into."),
         Map.entry("Skybox+", "Changes the appearance of the sky."),
         Map.entry("Font+", "Customizes game, interface, and 3D text."),

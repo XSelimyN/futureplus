@@ -38,8 +38,8 @@ import java.util.Collection;
 import java.util.Collections;
 
 /**
- * Port of Lure Client's DamageUtils + RaycastUtils (BlockRaycastContext / BlockRaycastClassifier): AutoCrystal's
- * explosion damage and visibility calculations. One-to-one with Lure: damage isn't floored, the difficulty multiplier applies to every target,
+ * Damage and raycast utilities (block raycast context / classifier): AutoCrystal's
+ * explosion damage and visibility calculations. Damage isn't floored, the difficulty multiplier applies to every target,
  * low resistance blocks (< 600) don't cut the ray, the given "solid" position counts as bedrock, ignored ones count as air.
  */
 final class CrystalDamage {

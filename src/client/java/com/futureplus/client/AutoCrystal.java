@@ -56,17 +56,17 @@ import java.util.UUID;
 import java.util.function.Predicate;
 
 /**
- * Port of Lure Client's AutoCrystalModule (AutoCrystalTargeting, CrystalTargetDamage, CrystalLethality, CrystalDamagePolicy,
- * CrystalPlacementValidator, CrystalPlacementResult/Kind, CrystalInteractionManager.attackEntity included).
+ * Crystal aura (targeting, target damage, lethality, damage policy, placement validation, placement result,
+ * attack handling).
  *
- * Not in the module list; runs with ForceSuicide while Suicide is on (target = you). Lure's order is kept:
+ * Not in the module list; runs with ForceSuicide while Suicide is on (target = you). Order:
  *  before the movement packet (CombatSupport.beforeSend): targets / eye / NoArmor, placement calculation, break, place, rotation request.
  *  when a crystal spawns (ClientboundAddEntityPacket): Instant break + Sequential next crystal + Factor attacks.
  *  ClientboundPlayerCombatKillPacket or leaving the server: ForceSuicide turns off.
  *
- * Modules that Lure has but futureplus doesn't (SpeedMine, Aura, AutoExp, Offhand, Swing, AntiCheat) are assumed off/default:
+ * Modules futureplus doesn't have (SpeedMine, Aura, AutoExp, Offhand, Swing, AntiCheat) are assumed off/default:
  * mining ignore never kicks in, MovementSync off, StrictDirection = NCP, 2b2t off.
- * Lure runs the placement calculation on a 4-thread pool; here it runs on the main thread every tick.
+ * The placement calculation runs on the main thread every tick.
  */
 public final class AutoCrystal {
     private AutoCrystal() {}
@@ -77,7 +77,7 @@ public final class AutoCrystal {
     public static final String[] SEQUENTIAL = {"None", "Strict", "Strong"};
     public static final String[] WEAKNESS = {"None", "Normal", "Silent"};
 
-    // ------------------------------------------------------------- settings (Lure defaults)
+    // ------------------------------------------------------------- settings (defaults)
 
     static boolean place = true;
     static double placeDelay = 0, placeRange = 6, placeWallRange = 6;
@@ -110,7 +110,7 @@ public final class AutoCrystal {
     static boolean forceSuicide = false, forceSuicideNoArmor = false;
     static boolean assumeInvincibility = false, assumeSelfInvincibility = true;
     static double invincibilityTimeout = 0;
-    static int autoSwap = 2, silent = 0;   // lure: AutoSwap None (doesn't place without a crystal in hand); Silent for Suicide
+    static int autoSwap = 2, silent = 0;   // AutoSwap Silent for Suicide (None would not place without a crystal in hand)
     static boolean swapBack = true, strictTiming = false, multipoint = false;
     static double swapDelay = 0, swapPenalty = 0;
 
@@ -205,7 +205,7 @@ public final class AutoCrystal {
     private static Vec3 eye;
     private static final List<long[]> boxes = new ArrayList<>();   // {x, y, z, time} render boxes
 
-    /** Lure ElapsedTimer: -1 at the start (counts as already elapsed). */
+    /** Elapsed timer: -1 at the start (counts as already elapsed). */
     private static final class Timer {
         long last = -1;
         void reset() { last = System.currentTimeMillis(); }
@@ -285,7 +285,7 @@ public final class AutoCrystal {
         if (calc == null) { placementData = null; selectedDamage = 0; }
         else { placementData = calc; selectedDamage = (float) calc.damage; target = calc.target; }
         for (Integer id : predictedAttackIds) {
-            if (mc.level.getEntity(id) instanceof EndCrystal) { /* lure: client-attacked mark (drawing only) */ }
+            if (mc.level.getEntity(id) instanceof EndCrystal) { /* client-attacked mark (drawing only) */ }
         }
         predictedAttackIds.removeIf(id -> mc.level.getEntity(id) != null);
         summary();
@@ -310,7 +310,7 @@ public final class AutoCrystal {
         runBreakCycle();
         if (placeTimer.passed((long) placeDelay)) runPlacementCycle();
         Vec3 rot = rotationTarget;
-        // the rotation itself is done by CombatSupport.look (the place/break gate); like in Lure, the plan drops without a rotation for 400 ms
+        // the rotation itself is done by CombatSupport.look (the place/break gate); the plan drops without a rotation for 400 ms
         if (rotate && rot != null && rotationTimer.passed(400)) { placementData = null; rotationTarget = null; }
     }
 
@@ -515,7 +515,7 @@ public final class AutoCrystal {
         return low;
     }
 
-    private static boolean facePlaceEnabled() { return facePlace; }   // lure: if Aura isn't hitting the target or DamageSync is off (no Aura)
+    private static boolean facePlaceEnabled() { return facePlace; }   // when no Aura is hitting the target and DamageSync is off (no Aura here)
 
     // ------------------------------------------------------------- placement validation (CrystalPlacementValidator)
 
@@ -589,7 +589,7 @@ public final class AutoCrystal {
             if (sel.kind == Kind.OBSIDIAN && basePlace) runForcedPlacement(base);
             return;
         }
-        // counterpart of Lure AntiCheat MovementSync (NCP/Grim): first turn to the base, place once the rotation reached the server; the swap waits too
+        // MovementSync (NCP/Grim): first turn to the base, place once the rotation reached the server; the swap waits too
         if (rotate && rotatePlace && !facingBase(base)) { dbg("place", "waiting for rotation"); return; }
         int original = -1;
         int crystalSlot = findHotbarSlot(s -> s.is(Items.END_CRYSTAL));
@@ -910,7 +910,7 @@ public final class AutoCrystal {
 
     private static boolean shouldPause() { return pauseReason() != null; }
 
-    /** Lure shouldPause; the reason if pausing (for debug), else null. */
+    /** shouldPause: the reason if pausing (for debug), else null. */
     private static String pauseReason() {
         Minecraft mc = mc();
         if (worldUnavailable()) return "world unavailable";
@@ -1046,7 +1046,7 @@ public final class AutoCrystal {
         return info == null ? 0 : info.getLatency();
     }
 
-    private static long tickDurationMillis() { return 500L; }   // lure: 500 / server tick scale (1.0)
+    private static long tickDurationMillis() { return 500L; }   // 500 / server tick scale (1.0)
 
     // ------------------------------------------------------------- helpers
 

@@ -12,8 +12,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Suicide: Lure Client's AutoCrystal > Targeting > ForceSuicide. When turned on it types ".t offhand" in chat (turns off Future's
- * Offhand/AutoTotem; in Lure the Offhand holds no totem while ForceSuicide is on), then runs the hidden AutoCrystal
+ * Suicide: AutoCrystal with ForceSuicide targeting. When turned on it types ".t offhand" in chat (turns off Future's
+ * Offhand/AutoTotem so no totem is held while ForceSuicide is on), then runs the hidden AutoCrystal
  * with ForceSuicide: you are the target, and crystals are placed and blown up where they hit you hardest.
  * On death (ClientboundPlayerCombatKillPacket) or leaving the server ForceSuicide turns off; Suicide turns off too and
  * ".t offhand" is typed again. AutoTotem is also turned back on if it is turned off by hand before dying.
@@ -21,7 +21,7 @@ import java.util.List;
  * The command is not typed letter by letter: it goes through ChatScreen's send path in one go without opening the chat screen, so
  * Future catches the command (whether it hooks the chat screen or sendChat) and it never reaches the server.
  *
- * The settings are AutoCrystal's (Lure defaults; the only difference is AutoSwap = Silent, None in Lure: it doesn't place without a crystal in hand).
+ * The settings are AutoCrystal's (defaults, with AutoSwap = Silent; None would not place without a crystal in hand).
  */
 public final class Suicide {
     private Suicide() {}
