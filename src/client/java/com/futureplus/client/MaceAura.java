@@ -514,6 +514,30 @@ public final class MaceAura {
 
     /** Whether the glide box can come down from point (feet) to hit distance of the target's head without touching a block. */
     private static boolean diveLineClear(Minecraft mc, LocalPlayer p, LivingEntity t, Vec3 at, Vec3 point) {
+        if (openDiveLine(mc, p, t, at, point)) return true;
+        return throughWalls && hoverLoop() && wallReach(mc, p, t, at, point);
+    }
+
+    /** Through walls: with blocks over the target, the dive is still allowed if the head is in hit range from the first surface on the way down. */
+    private static boolean wallReach(Minecraft mc, LocalPlayer p, LivingEntity t, Vec3 at, Vec3 point) {
+        if (!mc.level.noCollision(p, navBox(p, point).inflate(0.3, 0.0, 0.3))) return false;
+
+        Vec3 head = at.add(0, t.getBbHeight(), 0);
+        Vec3 dir = head.subtract(point);
+        double len = dir.length();
+        if (len < 0.5) return true;
+
+        Vec3 step = dir.scale(0.25 / len);
+        Vec3 pos = point;
+        for (double travelled = 0; travelled < len; travelled += 0.25) {
+            Vec3 next = pos.add(step);
+            if (!mc.level.noCollision(p, navBox(p, next))) break;
+            pos = next;
+        }
+        return boxDist(pos.add(0, p.getEyeHeight(), 0), boxAt(t, at)) <= Math.min(hr(), 3.0);
+    }
+
+    private static boolean openDiveLine(Minecraft mc, LocalPlayer p, LivingEntity t, Vec3 at, Vec3 point) {
         Vec3 head = at.add(0, t.getBbHeight(), 0);
         Vec3 dir = point.subtract(head);
         double len = dir.length();
@@ -1688,7 +1712,7 @@ public final class MaceAura {
                 NavKey nk = new NavKey(k.x() + ox, k.y() + oy, k.z() + oz);
                 if (Math.abs(nk.x()) > NAV_RANGE_H || Math.abs(nk.y()) > NAV_RANGE_V || Math.abs(nk.z()) > NAV_RANGE_H) continue;
                 if (closed.contains(nk)) continue;
-                int c = nk.equals(end) ? Math.max(1, cell.applyAsInt(nk)) : cell.applyAsInt(nk);
+                int c = cell.applyAsInt(nk);
                 if (c == 0) continue;
                 // no corner cutting: all cells covered by a diagonal step must be free
                 boolean ok = true;
@@ -1704,9 +1728,8 @@ public final class MaceAura {
                 open.add(new NavNode(nk, ng, ng + dist(nk, end) * NAV_HEURISTIC, node));
             }
         }
-        NavNode last = found != null ? found : closest;
+        NavNode last = found;
         if (last == null || last.parent() == null) return List.of();
-        if (found == null && closestH >= dist(origin, end) - 1.0) return List.of();   // couldn't get closer at all
 
         List<Vec3> cellsPath = new ArrayList<>();
         for (NavNode n = last; n != null; n = n.parent())

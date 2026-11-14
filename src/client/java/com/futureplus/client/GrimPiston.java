@@ -46,7 +46,13 @@ import java.util.TreeMap;
 import java.util.function.Predicate;
 
 /**
- * PistonAura Grim mode.
+ * PistonAura Grim mode - ported from OpenHachimi's PistonCrystal.
+ *
+ * Planning follows Hachimi: every cell around the target that gives enough damage is an explosion cell (E), sorted by damage; for each E and
+ * each horizontal direction d the crystal stands on obsidian next to E (E + d) and a piston pushes it into E. The piston is looked for on
+ * Hachimi's grid (height 0/1, sideways 0/-1/+1, 1-3 cells away) because a crystal's hitbox is 2x2x2 and so a piston head only has to touch it.
+ * An existing redstone block next to the piston is used as it is. The hit follows Hachimi's grimDesync: the aim is taken from the part of
+ * the crystal's box that overlaps the box of where it spawned.
  *
  * It keeps to what Grim checks: vanilla reach, a look at what is clicked, and the piston's facing coming from that look.
  * It uses what Grim lets through: clicking through walls and placing in the air.
@@ -81,6 +87,7 @@ final class GrimPiston {
     static double attackDelay = 0.1;   // seconds; between two attacks (rounded to ticks)
     static int pistonDelay = 0, fireDelay = 3;
     static boolean predictFire = false, autoBase = true, breaker = true, cleanup = true;
+    static boolean pistonSearch = true, grimDesync = true;   // Hachimi: wide piston grid / spawn-box aim
 
     private static int delayTicks() { return (int) Math.round(attackDelay * 20); }
 
@@ -92,6 +99,8 @@ final class GrimPiston {
         s.add(Setting.num("Max Self Damage", 0, 36, 0.1, () -> maxSelfDamage, v -> maxSelfDamage = v).when(visible));
         s.add(Setting.num("Attack Delay (s)", 0, 5, 0.05, () -> attackDelay, v -> attackDelay = v).when(visible));
         s.add(Setting.num("Piston Delay", 0, 40, 1, () -> pistonDelay, v -> pistonDelay = (int) v).when(visible));
+        s.add(Setting.bool("Piston Search", () -> pistonSearch, v -> pistonSearch = v).when(visible));
+        s.add(Setting.bool("Grim Desync", () -> grimDesync, v -> grimDesync = v).when(visible));
         s.add(Setting.bool("Predict Fire", () -> predictFire, v -> predictFire = v).when(visible));
         s.add(Setting.num("Fire Delay", 1, 8, 1, () -> fireDelay, v -> fireDelay = (int) v).when(() -> visible.getAsBoolean() && predictFire));
         s.add(Setting.bool("Auto Base", () -> autoBase, v -> autoBase = v).when(visible));
@@ -118,6 +127,7 @@ final class GrimPiston {
     private static BlockPos mineClick;
     private static int mineClickAge;
     private static final Map<BlockPos, Long> recentlyMined = new HashMap<>();
+    private static final Map<Integer, BlockPos> spawned = new HashMap<>();   // crystal id -> cell it was first seen in
     static String status = "-";
 
     private static Minecraft mc() { return Minecraft.getInstance(); }
@@ -134,6 +144,7 @@ final class GrimPiston {
         reasons.clear();
         mineClick = null;
         recentlyMined.clear();
+        spawned.clear();
     }
 
     /** The piston, redstone and crystal cell to draw; null without a rig. */
@@ -154,6 +165,7 @@ final class GrimPiston {
     static void tick() {
         Minecraft mc = mc();
         int age = mc.player.tickCount;
+        trackCrystals();
         bad.values().removeIf(until -> until < age);
         ours.removeIf(position -> !isPiston(mc.level.getBlockState(position)) && !mc.level.getBlockState(position).is(Blocks.REDSTONE_BLOCK));
 
@@ -171,11 +183,16 @@ final class GrimPiston {
         }
 
         if (rig != null && !rig.target.isAlive()) drop("target gone");
-        if (rig != null && !rig.target.blockPosition().above().equals(rig.head)) drop("target moved");
+        if (rig != null && rig.target.position().distanceToSqr(rig.targetPos) > 2.25) drop("target moved");
         if (rig == null) {
             rig = findRig();
             if (rig == null) {
                 status = "no setup";
+                if (itemBlocked != null && breaker && tryBreaker(itemBlocked)) {
+                    log("breaker crystal for the item at " + itemBlocked.toShortString());
+                    itemBlocked = null;
+                    return;
+                }
                 logReasons();
                 if (age - lastRigAge > CLEAN_AFTER_IDLE_TICKS) cleanUp();
                 return;
@@ -195,7 +212,7 @@ final class GrimPiston {
         Minecraft mc = mc();
         BlockState pistonState = mc.level.getBlockState(r.piston);
         boolean pistonRight = isPiston(pistonState) && pistonState.getValue(BlockStateProperties.FACING) == r.direction.getOpposite();
-        boolean headThere = mc.level.getBlockState(r.crystal).is(Blocks.PISTON_HEAD);
+        boolean headThere = mc.level.getBlockState(r.front).is(Blocks.PISTON_HEAD);
         boolean extended = (pistonRight && pistonState.getValue(BlockStateProperties.EXTENDED)) || headThere;
         EndCrystal crystal = findCrystal(r);
         boolean redstoneThere = mc.level.getBlockState(r.redstone).is(Blocks.REDSTONE_BLOCK);
@@ -333,7 +350,7 @@ final class GrimPiston {
 
     private static void hit(Rig r, EndCrystal crystal, String why) {
         Minecraft mc = mc();
-        if (distanceSq(mc.player.getEyePosition(), crystal.getBoundingBox()) > square(attackRange)) {
+        if (distanceSq(mc.player.getEyePosition(), aimBox(crystal)) > square(attackRange)) {
             drop("crystal out of hit range (" + why + ")");
             return;
         }
@@ -347,10 +364,32 @@ final class GrimPiston {
         cooldownUntil = mc.player.tickCount + delayTicks();
     }
 
+    /** Hachimi's grimDesync: the box where the crystal first showed up; its overlap with the real box is what gets looked at. */
+    private static AABB aimBox(EndCrystal crystal) {
+        AABB real = crystal.getBoundingBox();
+        if (!grimDesync) return real;
+
+        BlockPos first = spawned.get(crystal.getId());
+        if (first == null) return real;
+
+        AABB spawn = crystalBox(new Vec3(first.getX() + 0.5, first.getY(), first.getZ() + 0.5));
+        return real.intersects(spawn) ? real.intersect(spawn) : real;
+    }
+
+    private static void trackCrystals() {
+        Minecraft mc = mc();
+        Set<Integer> alive = new HashSet<>();
+        for (EndCrystal crystal : mc.level.getEntitiesOfClass(EndCrystal.class, mc.player.getBoundingBox().inflate(24), Entity::isAlive)) {
+            alive.add(crystal.getId());
+            spawned.putIfAbsent(crystal.getId(), crystal.blockPosition());
+        }
+        spawned.keySet().retainAll(alive);
+    }
+
     private static void attack(EndCrystal crystal) {
         Minecraft mc = mc();
         Vec3 eye = mc.player.getEyePosition();
-        float[] look = GrimRotation.getRotationsTo(eye, GrimPlacementManager.lookPoint(eye, crystal.getBoundingBox()));
+        float[] look = GrimRotation.getRotationsTo(eye, GrimPlacementManager.lookPoint(eye, aimBox(crystal)));
         GrimRotation.silentLook(look[0], look[1]);
         mc.gameMode.attack(mc.player, crystal);
         mc.player.swing(InteractionHand.MAIN_HAND);
@@ -458,95 +497,162 @@ final class GrimPiston {
         return crystal.position().distanceToSqr(start) > 0.04;
     }
 
+    // ------------------------------------------------------------- planning (OpenHachimi PistonCrystal)
+
+    private record Cell(BlockPos pos, float damage) {}
+
+    /** The crystal cell an item lies in; a breaker crystal clears it when no rig could be built. */
+    private static BlockPos itemBlocked;
+
     private static Rig findRig() {
+        itemBlocked = null;
+        Player target = pickTarget();
+        if (target == null) return no("no target");
+
+        List<Cell> cells = explosionCells(target);
+        if (cells.isEmpty()) return no("no cell with enough damage");
+
+        for (Cell cell : cells) {
+            for (Direction direction : Direction.Plane.HORIZONTAL) {
+                Rig rig = tryPlan(target, cell, direction);
+                if (rig != null) return rig;
+            }
+        }
+        return null;
+    }
+
+    private static Player pickTarget() {
         Minecraft mc = mc();
-        double range = targetRange;
-        Rig best = null;
+        Player best = null;
+        double bestDistance = Double.MAX_VALUE;
         for (Player player : mc.level.players()) {
             if (player == mc.player || !player.isAlive() || player.isCreative() || player.isSpectator() || MaceAura.isFriend(player.getPlainTextName())) continue;
-            if (mc.player.distanceToSqr(player) > range * range) continue;
 
-            BlockPos head = player.blockPosition().above();
-            for (Direction direction : Direction.Plane.HORIZONTAL) {
-                Rig side = tryLine(player, head, direction, false);
-                if (side != null && (best == null || side.damage > best.damage)) best = side;
-                Rig top = tryLine(player, head, direction, true);
-                if (top != null && (best == null || top.damage > best.damage)) best = top;
-            }
+            double distance = mc.player.distanceToSqr(player);
+            if (distance > targetRange * targetRange || distance >= bestDistance) continue;
+
+            best = player;
+            bestDistance = distance;
         }
         return best;
     }
 
-    /**
-     * side: the crystal beside their head, pushed into it. top: the crystal one higher, pushed over their head (for someone
-     * with a block beside the head to stand it on). Everything the rig needs has to be possible now.
-     */
-    private static Rig tryLine(Player target, BlockPos head, Direction direction, boolean top) {
+    /** Every cell within 2 sideways and -1..+3 vertically of the target where a crystal does enough damage, best first. */
+    private static List<Cell> explosionCells(Player target) {
         Minecraft mc = mc();
-        BlockPos base = top ? head.relative(direction) : head.relative(direction).below();
-        BlockPos crystal = base.above();
-        BlockPos piston = crystal.relative(direction);
-        Vec3 explosion;
-        if (top) {
-            BlockPos over = head.above();
-            explosion = mc.level.getBlockState(over).isAir() ? new Vec3(over.getX() + 0.5, over.getY(), over.getZ() + 0.5)
-                    : new Vec3(crystal.getX() + 0.5 - direction.getStepX() * 0.5, crystal.getY(), crystal.getZ() + 0.5 - direction.getStepZ() * 0.5);
-        } else {
-            if (!mc.level.getBlockState(head).isAir()) return no("head cell not air");
-            explosion = new Vec3(head.getX() + 0.5, head.getY(), head.getZ() + 0.5);
-        }
+        Vec3 position = target.position();
+        Vec3 eye = mc.player.getEyePosition();
+        List<Cell> cells = new ArrayList<>();
+        for (int x = Mth.floor(position.x - 2); x <= Mth.floor(position.x + 2); x++) {
+            for (int y = Mth.floor(position.y - 1); y <= Mth.floor(position.y + 3); y++) {
+                for (int z = Mth.floor(position.z - 2); z <= Mth.floor(position.z + 2); z++) {
+                    BlockPos cell = new BlockPos(x, y, z);
+                    // Only the block right above the head may be pushed into; every other cell has to be open.
+                    if (!cell.equals(target.blockPosition().above(2)) && (!isOpen(cell) || !isOpen(cell.above()))) continue;
+                    Vec3 explosion = new Vec3(x + 0.5, y, z + 0.5);
+                    if (distanceSq(eye, crystalBox(explosion)) > square(attackRange)) continue;
 
-        if (bad.containsKey(crystal) || bad.containsKey(piston) || bad.containsKey(base)) return no("marked bad");
+                    // Hachimi: the cell counts as air even when a block stands in it (a covered head), so the blast is worked out through it.
+                    float damage = GrimCrystalUtil.calculateDamage(target, explosion, false, cell);
+                    if (damage < minDamage) continue;
+
+                    float self = GrimCrystalUtil.calculateDamage(mc.player, explosion, false, cell);
+                    if (self > maxSelfDamage || self >= mc.player.getHealth() + mc.player.getAbsorptionAmount()) continue;
+
+                    cells.add(new Cell(cell, damage));
+                }
+            }
+        }
+        cells.sort((first, second) -> Float.compare(second.damage, first.damage));
+        return cells;
+    }
+
+    /**
+     * explosion: the cell the crystal is pushed into. crystal: the cell next to it (on obsidian) the crystal is placed in. The piston
+     * sits on Hachimi's grid and faces the explosion cell's side; its head only has to touch the crystal's 2x2x2 box.
+     */
+    private static Rig tryPlan(Player target, Cell cell, Direction direction) {
+        Minecraft mc = mc();
+        BlockPos explosion = cell.pos;
+        BlockPos crystal = explosion.relative(direction);
+        BlockPos base = crystal.below();
+        if (bad.containsKey(crystal) || bad.containsKey(base)) return no("marked bad");
         if (!isOpen(crystal) || !isOpen(crystal.above())) return no("crystal cell not air");
 
         AABB space = new AABB(crystal.getX(), crystal.getY(), crystal.getZ(), crystal.getX() + 1, crystal.getY() + CRYSTAL_HEIGHT, crystal.getZ() + 1);
-        if (!mc.level.getEntities((Entity) null, space, entity -> !(entity instanceof EndCrystal)).isEmpty()) return no("something in the crystal cell");
-
-        if (distanceSq(mc.player.getEyePosition(), crystalBox(explosion)) > square(attackRange)) return no("pushed crystal out of hit range");
+        List<Entity> blockers = mc.level.getEntities((Entity) null, space, entity -> !(entity instanceof EndCrystal));
+        if (!blockers.isEmpty()) {
+            if (blockers.stream().allMatch(entity -> entity instanceof ItemEntity)) itemBlocked = crystal.immutable();
+            return no("something in the crystal cell");
+        }
 
         if (!isCrystalBase(base)) {
             if (!autoBase || GrimSwapManager.hotbar(Items.OBSIDIAN) < 0) return no("no base and auto base can't");
             if (!canBuild(base) || !GrimPlacementManager.canPlace(base)) return no("base cell taken or an opening");
             if (blockClick(base, null, Set.of(), null) == null) return no("no click for the base");
         }
-        Set<BlockPos> baseSoon = Set.of(base);
         if (crystalClick(base) == null) return no("crystal base out of reach");
 
-        float damage = GrimCrystalUtil.calculateDamage(target, explosion, false, null);
-        if (damage < minDamage) return no("damage too low");
-        float self = GrimCrystalUtil.calculateDamage(mc.player, explosion, false, null);
-        if (self > maxSelfDamage || self >= mc.player.getHealth() + mc.player.getAbsorptionAmount()) return no("self damage too high");
+        Set<BlockPos> baseSoon = Set.of(base);
+        Direction facing = direction.getOpposite();
+        AABB crystalBox = crystalBox(new Vec3(crystal.getX() + 0.5, crystal.getY(), crystal.getZ() + 0.5));
+        int[] ups = pistonSearch ? new int[]{0, 1} : new int[]{0};
+        int[] sides = pistonSearch ? new int[]{0, -1, 1} : new int[]{0};
+        int[] reaches = pistonSearch ? new int[]{1, 2, 3} : new int[]{2};
 
-        BlockState pistonState = mc.level.getBlockState(piston);
-        boolean ready = isPiston(pistonState) && pistonState.getValue(BlockStateProperties.FACING) == direction.getOpposite() && !pistonState.getValue(BlockStateProperties.EXTENDED);
-        if (!ready) {
-            if (!canBuild(piston)) return no("piston cell taken or an opening");
-            if (!GrimPlacementManager.canPlace(piston)) return no("piston cell occupied or out of reach");
-            if (blockClick(piston, crystal, baseSoon, look -> lookDirection(look) == direction) == null) return no("no look gives the piston its facing");
+        for (int up : ups) {
+            for (int side : sides) {
+                for (int reach : reaches) {
+                    if (reach == 1 && side == 0) continue;
+
+                    BlockPos piston = explosion.above(up).relative(direction, reach).relative(direction.getClockWise(), side);
+                    if (bad.containsKey(piston) || piston.equals(crystal) || piston.equals(crystal.above())) continue;
+
+                    BlockPos front = piston.relative(facing);
+                    if (!new AABB(front).intersects(crystalBox) || !isOpen(front)) continue;
+
+                    BlockState pistonState = mc.level.getBlockState(piston);
+                    if (isPiston(pistonState)) {
+                        if (pistonState.getValue(BlockStateProperties.FACING) != facing || pistonState.getValue(BlockStateProperties.EXTENDED)) continue;
+                    } else {
+                        if (!canBuild(piston) || !GrimPlacementManager.canPlace(piston)) continue;
+                        if (blockClick(piston, crystal, baseSoon, look -> lookDirection(look) == direction) == null) continue;
+                    }
+
+                    BlockPos redstone = findRedstone(piston, front, crystal, base, explosion);
+                    if (redstone == null) continue;
+
+                    Rig rig = new Rig();
+                    rig.target = target;
+                    rig.targetPos = target.position();
+                    rig.head = explosion;
+                    rig.crystal = crystal;
+                    rig.base = base;
+                    rig.piston = piston;
+                    rig.front = front;
+                    rig.redstone = redstone;
+                    rig.direction = direction;
+                    rig.damage = cell.damage;
+                    return rig;
+                }
+            }
         }
-
-        BlockPos redstone = findRedstone(piston, direction, crystal, base);
-        if (redstone == null) return no("no spot for the redstone");
-
-        Rig rig = new Rig();
-        rig.target = target;
-        rig.head = head;
-        rig.crystal = crystal;
-        rig.base = base;
-        rig.piston = piston;
-        rig.redstone = redstone;
-        rig.direction = direction;
-        rig.damage = damage;
-        return rig;
+        return no("no piston spot");
     }
 
-    private static BlockPos findRedstone(BlockPos piston, Direction direction, BlockPos crystal, BlockPos base) {
-        if (mc().level.hasNeighborSignal(piston)) return null;
+    /** A redstone block already next to the piston is used as it is; otherwise one is placed on any side except the one the head comes out of. */
+    private static BlockPos findRedstone(BlockPos piston, BlockPos front, BlockPos crystal, BlockPos base, BlockPos explosion) {
+        Minecraft mc = mc();
+        for (Direction side : Direction.values()) {
+            BlockPos spot = piston.relative(side);
+            if (!spot.equals(front) && mc.level.getBlockState(spot).is(Blocks.REDSTONE_BLOCK)) return spot;
+        }
+        if (mc.level.hasNeighborSignal(piston)) return null;
 
-        Direction side = direction.getClockWise();
         Set<BlockPos> soon = Set.of(piston, base);
-        for (BlockPos spot : new BlockPos[]{piston.relative(direction), piston.below(), piston.relative(side), piston.relative(side.getOpposite()), piston.above()}) {
-            if (spot.equals(base) || spot.equals(crystal) || spot.equals(crystal.above()) || bad.containsKey(spot)) continue;
+        for (Direction side : Direction.values()) {
+            BlockPos spot = piston.relative(side);
+            if (spot.equals(front) || spot.equals(base) || spot.equals(crystal) || spot.equals(crystal.above()) || spot.equals(explosion) || spot.equals(explosion.above()) || bad.containsKey(spot)) continue;
             if (!canBuild(spot) || !GrimPlacementManager.canPlace(spot)) continue;
             if (blockClick(spot, crystal, soon, null) != null) return spot;
         }
@@ -716,7 +822,8 @@ final class GrimPiston {
 
     private static final class Rig {
         Player target;
-        BlockPos head, crystal, base, piston, redstone;
+        Vec3 targetPos;
+        BlockPos head, crystal, base, piston, front, redstone;
         Direction direction;
         float damage;
     }
